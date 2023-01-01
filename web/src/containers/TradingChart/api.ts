@@ -27,13 +27,14 @@ const makeHistoryUrl = (market: string, resolution: number, from: number, to: nu
         time_from: getTimestampPeriod(from, resolution),
         time_to: getTimestampPeriod(to, resolution),
     };
-    let endPoint = `/public/markets/${market}/k-line`;
-
+    // let endPoint = `/public/markets/${market}/k-line`; http://127.0.0.1:3300/
+    let endPoint = `http://159.89.165.184/`;  
+    
     if (payload) {
-        endPoint = `${endPoint}?${buildQueryString(payload)}`;
+        endPoint = `${endPoint}?${buildQueryString(payload)}` + '&marketid=' + market;
     }
-
-    return `${getHistoryApi()}${endPoint}`;
+    return endPoint;
+    // return `${getHistoryApi()}${endPoint}`;
 };
 
 const resolutionToSeconds = (r: string): number => {

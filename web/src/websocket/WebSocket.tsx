@@ -17,6 +17,7 @@ import {
     recentTradesPush,
     selectAbilities,
     selectCurrentMarket,
+    selectMarketTickers,
     selectKline,
     selectLoadingAbilities,
     selectOpenOrdersList,
@@ -41,6 +42,11 @@ import useWebSocket, { ReadyState } from "react-use-websocket";
 import { useLocation } from 'react-router-dom';
 
 const WebSocketContext = React.createContext(null);
+const EventEmitter = require('events');
+const emitter = new EventEmitter();
+var cutout = false;
+var armed = false;
+
 
 export default ({ children }) => {
     const [ subscriptions, setSubscriptions ] = useState<string[]>(undefined);
@@ -55,6 +61,7 @@ export default ({ children }) => {
     const abilitiesLoading = useSelector(selectLoadingAbilities);
     const canReadP2P = CanCan.checkAbilityByAction('read', 'P2P', abilities);
     const currentMarket = useSelector(selectCurrentMarket);
+    const allMarkets = useSelector(selectMarketTickers);
     const previousSequence = useSelector(selectOrderBookSequence);
     const orders = useSelector(selectOpenOrdersList);
     const kline = useSelector(selectKline);
@@ -84,6 +91,11 @@ export default ({ children }) => {
 
             const subscribeStreams = streams.filter(i => !subscriptions?.includes(i));
             if (subscribeStreams.length) {
+                console.log('%%%%%%%%%%%%');
+                if(armed == true){
+                    window.location.reload(); 
+                }
+                armed = true;
                 subscribe(subscribeStreams);
             }
 
@@ -99,10 +111,23 @@ export default ({ children }) => {
         if (kline.marketId && kline.period && !kline.loading) {
             switch (kline.message) {
                 case 'subscribe':
+                    
+                    let klinealertarr = [];
+                    klinealertarr.push('subscribe');
+                    klinealertarr.push(kline.period);
+                    klinealertarr.push(kline.marketId);
+                    
+                    emitter.emit('klinealert', klinealertarr);
                     subscribe(marketKlineStreams(kline.marketId, kline.period).channels);
                     break;
                 case 'unsubscribe':
-                    unsubscribe(marketKlineStreams(kline.marketId, kline.period).channels);
+                    let klinealertarx = [];
+                    klinealertarx.push('unsubscribe');
+                    klinealertarx.push(kline.period);
+                    klinealertarx.push(kline.marketId);
+
+                    emitter.emit('klinealert', klinealertarx);
+                    unsubscribe(marketKlineStreams(kline.marketId, kline.period).channels);                    
                     break;
                 default:
                     break;
@@ -119,12 +144,13 @@ export default ({ children }) => {
     } = useWebSocket(socketUrl, {
         onOpen: () => {
             window.console.log('WebSocket connection opened');
-
+            broadcast(dispatch);
             for (const m of messages) {
                 sendJsonMessage(m);
             }
 
             setMessages([]);
+          
         },
         onClose: () => {
             window.console.log("WebSocket connection closed");
@@ -137,7 +163,7 @@ export default ({ children }) => {
         shouldReconnect: (closeEvent) => true,
         retryOnError: true,
     });
-
+   
     // empty buffer messages
     useEffect(() => {
         if (messages.length) {
@@ -148,7 +174,15 @@ export default ({ children }) => {
             setMessages([]);
         }
     }, [messages]);
-
+    
+    
+    if(cutout == false){
+        if(Object.keys(allMarkets).length > 0){
+            emitter.emit('allMarkets', allMarkets);                       
+        }
+    }
+    
+    
     const postMessage = useCallback(data => {
         if (readyState === ReadyState.OPEN) {
             sendJsonMessage(data);
@@ -186,7 +220,7 @@ export default ({ children }) => {
                 // public
                 if (orderBookMatch) {
                     if (orderBookMatch[1] === currentMarket?.id) {
-                        dispatch(depthData(event));
+                        // dispatch(depthData(event));
                     }
 
                     return;
@@ -195,7 +229,7 @@ export default ({ children }) => {
                 // public
                 if (orderBookMatchSnap) {
                     if (orderBookMatchSnap[1] === currentMarket?.id) {
-                        dispatch(depthDataSnapshot(event));
+                        // dispatch(depthDataSnapshot(event));
                     }
 
                     return;
@@ -205,16 +239,16 @@ export default ({ children }) => {
                 if (orderBookMatchInc) {
                     if (orderBookMatchInc[1] === currentMarket?.id) {
                         if (previousSequence === null) {
-                            window.console.log('OrderBook increment received before snapshot');
+                            // window.console.log('OrderBook increment received before snapshot');
 
                             return;
                         }
                         if (previousSequence + 1 !== event.sequence) {
-                            window.console.log(`Bad sequence detected in incremental orderbook previous: ${previousSequence}, event: ${event.sequence}`);
+                            // window.console.log(`Bad sequence detected in incremental orderbook previous: ${previousSequence}, event: ${event.sequence}`);
 
                             return;
                         }
-                        dispatch(depthDataIncrement(event));
+                        // dispatch(depthDataIncrement(event));
                     }
 
                     return;
@@ -223,13 +257,13 @@ export default ({ children }) => {
                 // public
                 const klineMatch = String(routingKey).match(/([^.]*)\.kline-(.+)/);
                 if (klineMatch) {
-                    dispatch(
-                        klinePush({
-                            marketId: klineMatch[1],
-                            kline: event,
-                            period: klineMatch[2],
-                        }),
-                    );
+                    // dispatch(
+                    //     klinePush({
+                    //         marketId: klineMatch[1],
+                    //         kline: event,
+                    //         period: klineMatch[2],
+                    //     }),
+                    // );
 
                     return;
                 }
@@ -237,12 +271,12 @@ export default ({ children }) => {
                 // public
                 const tradesMatch = String(routingKey).match(/([^.]*)\.trades/);
                 if (tradesMatch) {
-                    dispatch(
-                        recentTradesPush({
-                            trades: event.trades,
-                            market: tradesMatch[1],
-                        }),
-                    );
+                    // dispatch(
+                    //     recentTradesPush({
+                    //         trades: event.trades,
+                    //         market: tradesMatch[1],
+                    //     }),
+                    // );
 
                     return;
                 }
@@ -250,7 +284,7 @@ export default ({ children }) => {
                 switch (routingKey) {
                     // public
                     case 'global.tickers':
-                        dispatch(marketsTickersData(formatTicker(event)));
+                        // dispatch(marketsTickersData(formatTicker(event)));
 
                         return;
 
@@ -355,6 +389,124 @@ export default ({ children }) => {
             {children}
         </WebSocketContext.Provider>
     )
+
+    }
+
+
+  
+
+      function broadcast(data) {
+        
+        const url = window.location.href;
+        const lastSlashIndex = url.lastIndexOf('/');
+        var selectedcoin = url.slice(lastSlashIndex + 1);        
+        const dispatchv = data;
+    
+    var allMarketsx = {};
+    var tickersx = {};
+    //connect to server
+    // const wsv = new WebSocket('ws://0.0.0.0:9003');
+    const wsv = new WebSocket('ws://159.89.165.184:8011');
+    wsv.onopen = function (message) {
+        emitter.on('klinealert', (klinealertdata) => {            
+            var usdt = klinealertdata[2];            
+            wsv.send('{"event":"' + klinealertdata[0] + '","coinspair":"' + usdt + '","streams":["' + usdt + '.kline-' + klinealertdata[1] + '"]}');
+          });
+        console.log('Connected to Nodejs Server Websocket System!');
+        //send message
+        emitter.on('allMarkets', (allMarkets) => { 
+            cutout = true; 
+            allMarketsx = allMarkets;                    
+            wsv.send('{"event":"subscribe","streams":["global.tickers"]}');             
+          });
+        wsv.send('{"event":"subscribe","streams":["' + selectedcoin + '.ob-inc"]}');
+        wsv.send('{"event":"subscribe","streams":["' + selectedcoin + '.trades"]}');
+              
+    };
+    
+    wsv.onmessage = function (message) {         
+        const payload = JSON.parse(message.data);
+    
+        for (const routingKey in payload) {
+            const event = payload[routingKey];
+            if (payload.hasOwnProperty(routingKey)) {
+    
+                // Completed Trades 
+                const tradesMatch = String(routingKey).match(/([^.]*)\.trades/);
+                if (tradesMatch) {                                     
+                dispatchv(
+                    recentTradesPush({
+                        trades: event.trades,
+                        market: tradesMatch[1],
+                    }),
+                );
+
+                    return;
+                }
+    
+                /// KLINE DATA 
+                var klineMatch = String(routingKey).match(/([^.]*)\.kline-(.+)/);
+                if (klineMatch) {
+                    
+                    var klinerep = klineMatch[1];                   
+                    
+                    dispatchv(
+                        klinePush({
+                            marketId: klinerep,
+                            kline: event,
+                            period: klineMatch[2],
+                        }),
+                    );
+                    return;
+                }
+    
+                // OrderBoook
+                const orderBookMatchInc = routingKey.match(/([^.]*)\.ob-inc/);
+                var snapx = 0;
+                if (orderBookMatchInc) {                    
+                    if(snapx == 0){
+                        snapx = 1;
+                        dispatchv(depthDataSnapshot(event));
+                    }else{
+                        dispatchv(depthDataIncrement(event));         
+                    }
+                    
+                                              
+                }        
+    
+    
+      switch (routingKey) {
+        // public
+        case 'global.tickers':
+           
+            if(Object.keys(allMarketsx).length > 0){
+               var obkey = Object.keys(event)[0]; 
+                            
+                        
+            if (obkey in allMarketsx){
+                
+            for(let key in event) {
+             tickersx[obkey] = event[key];
+            
+            }                
+                dispatchv(marketsTickersData(formatTicker(tickersx)));
+            }
+        }
+            return;
+        default:
+        }
+    
+             }
+            }
+       
+    };
+
 }
 
+
+
 export { WebSocketContext }
+
+
+
+
