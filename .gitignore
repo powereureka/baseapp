@@ -17,3 +17,4 @@ web/.env.development.local
 web/.env.test.local
 web/.env.production.local
 web/.env
+web.zip

@@ -7,14 +7,14 @@ describe("Constants", () => {
         ["page.header.navbar.openOrders", "/orders", "orders"],
         ["page.header.navbar.history", "/history", "history"],
         ["page.header.navbar.internal.transfer", "/internal-transfer", "internal_transfer"],
-        ["page.header.navbar.api", "/docs", "api"],
+       
     ];
 
     const expectedRoutesForNotLoggedInUser = [
         ["page.header.navbar.signIn", "/signin", "signin"],
         ["page.header.signUp", "/signup", "signup"],
         ["page.header.navbar.trade", "/trading/", "trade"],
-        ["page.header.navbar.api", "/docs", "api"],
+      
     ];
 
     it("Rendering correct title prefix", () => {
